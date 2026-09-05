@@ -1,14 +1,14 @@
 # Snail.Toolkit.Cryptography
 
-A robust extension for `System.Security.Cryptography` providing simplified symmetric encryption using AES with PBKDF2 key derivation.
+Symmetric AES encryption with PBKDF2 key derivation for .NET — an `ISymmetricCipher` over byte arrays and Base64 strings, configured through `IOptions` and registered with a single `AddSymmetricCipher` call.
 
 ## Features
 
-- **AES Encryption**: 128/192/256-bit symmetric encryption
-- **PBKDF2 Key Derivation**: Secure password-based key generation
-- **Async API**: All operations are asynchronous
-- **Multiple Input Formats**: Support for raw bytes and Base64 strings
-- **Configurable Security**: Customizable iterations, hash algorithms, and key lengths
+- **Authenticated encryption**: AES-GCM, so an altered ciphertext is rejected rather than decrypted into altered plaintext
+- **A fresh nonce per message**: the same text never encrypts to the same bytes twice
+- **Self-describing ciphertext**: a versioned envelope carrying its own nonce and tag
+- **Key derived once**: PBKDF2 runs when the cipher is built, not on every call
+- **Settings checked at startup**: a bad key length or a missing passphrase stops the host, not the first request
 
 ## Installation
 
@@ -18,27 +18,13 @@ dotnet add package Snail.Toolkit.Cryptography
 
 ## Configuration
 
-### Basic Setup
-
-```csharp
-builder.Services.AddSymmetricCipher(o =>
-{
-    o.Passphrase = "YourSecurePassphrase123!"; // Minimum 12 characters
-    o.IV = "Random16ByteValue=="; // Should be cryptographically random
-    o.Iterations = 600_000; // Recommended ≥100,000 for production
-    o.HashMethod = HashAlgo.SHA512;
-    o.DesiredKeyLength = 32; // 256-bit AES
-});
-```
-
-### Configuration from appsettings.json
+### From appsettings.json
 
 ```json
 {
   "Cryptography": {
-    "Passphrase": "YourSecurePassphrase123!",
-    "IV": "Random16ByteValue==",
-    "Salt": "Random16ByteSalt==",
+    "Passphrase": "from a secret store, not from this file",
+    "Salt": "a long random value, unique per deployment",
     "Iterations": 600000,
     "DesiredKeyLength": 32,
     "HashMethod": "SHA512"
@@ -50,74 +36,85 @@ builder.Services.AddSymmetricCipher(o =>
 builder.Services.AddSymmetricCipher(builder.Configuration);
 ```
 
-### Default Values (Development Only)
+The section defaults to `Cryptography` and can be named explicitly:
 
 ```csharp
-builder.Services.AddSymmetricCipher(); // INSECURE for production!
+builder.Services.AddSymmetricCipher(builder.Configuration, "Encryption");
 ```
+
+### In code
+
+```csharp
+builder.Services.AddSymmetricCipher(options =>
+{
+    options.Passphrase = secrets["Cryptography:Passphrase"];
+    options.Salt = secrets["Cryptography:Salt"];
+    options.Iterations = 600_000;
+    options.DesiredKeyLength = 32;
+    options.HashMethod = HashAlgo.SHA512;
+});
+```
+
+`Passphrase` and `Salt` are required. `DesiredKeyLength` must be 16, 24 or 32, `Iterations` at least 100 000. Anything else fails validation when the host starts.
 
 ## Usage
 
-### Dependency Injection
-
 ```csharp
-public class MyService(ISymmetricCipher crypto)
+public class Vault(ISymmetricCipher cipher)
 {
-    public async Task<string> SecureOperation(string data)
-    {
-        var encrypted = await crypto.EncryptToBase64Async(data);
-        // ... store encrypted data
-        return await crypto.DecryptFromBase64Async(encrypted);
-    }
+    public string Store(string data) => cipher.EncryptToBase64(data);
+
+    public string Read(string stored) => cipher.DecryptFromBase64(stored);
 }
 ```
 
-### Basic Operations
-
 ```csharp
-// Encryption
-var ciphertext = await _crypto.EncryptToBase64Async("Sensitive data");
-var rawCipher = await _crypto.EncryptAsync(new byte[] { 1, 2, 3, 4, 5 });
+var text = cipher.EncryptToBase64("Sensitive data");
+var back = cipher.DecryptFromBase64(text);
 
-// Decryption
-var plaintext = await _crypto.DecryptFromBase64Async(ciphertext);
-var rawBytes = await _crypto.DecryptAsync(rawCipher);
+var bytes = cipher.Encrypt([1, 2, 3, 4, 5]);
+var raw = cipher.Decrypt(bytes);
 ```
 
-## Security Recommendations
+The operations are synchronous: they are CPU work over memory, and the one cost that genuinely blocked a thread — key derivation — is now paid once, when the cipher is constructed.
 
-1. **Passphrase**:
-    - Use 12+ characters with mixed cases, numbers, and symbols
-    - Store in secure secret manager (not in code/config files)
+## Ciphertext format
 
-2. **Initialization Vector (IV)**:
-    - Should be 16 random bytes (128 bits)
-    - Never reuse with same key
-    - Store with ciphertext (doesn't need to be secret)
+```
+version(1) | nonce(12) | tag(16) | ciphertext(n)
+```
 
-3. **Key Derivation**:
-    - Use ≥100,000 iterations for PBKDF2
-    - Prefer SHA-384 or SHA-512 as hash algorithm
-    - Always use random salt (16+ bytes recommended)
+29 bytes of overhead per value, independent of length. The version byte is what makes a future format distinguishable from this one.
 
-4. **Key Length**:
-    - Use 32 bytes (256-bit) for maximum AES security
+`Decrypt` throws `CryptographicException` when the envelope is truncated, carries an unknown version, was altered, or was produced under a different key.
 
-## Supported Algorithms
+## Security
 
-### Hash Algorithms
-- ✅ SHA-256 (minimum recommended)
-- ✅ SHA-384 (balanced security/performance)
-- ✅ SHA-512 (maximum security)
-- ⚠️ SHA-1 (deprecated - legacy support only)
+- Keep `Passphrase` in a secret store. A configuration file is not one.
+- `Salt` is required and should be long and random. It is what stops a derived key from being precomputable across every deployment sharing a passphrase.
+- `Iterations` defaults to 600 000, the OWASP figure for PBKDF2-HMAC-SHA512. Lowering it below 100 000 is refused.
+- Passphrase and salt are read as UTF-8, so any alphabet survives them.
+- There is no default passphrase and no parameterless registration. Encryption that silently works without configuration is worse than encryption that refuses to start.
 
-### Unsupported Algorithms
-- ❌ MD5 (cryptographically broken)
-- ❌ SHA-3 variants (future implementation)
+## Supported hash algorithms
 
-## Security Considerations
+`SHA256`, `SHA384`, `SHA512` — used to stretch the passphrase during key derivation.
 
-⚠️ **Important**: The default configuration is INSECURE and should only be used for development/testing. Always provide proper configuration in production environments.
+SHA-1 was removed: it was the only choice here that weakened the derived key, and leaving it selectable meant a configuration file could quietly pick it.
+
+## Upgrading from 1.x
+
+Version 2 changes both the ciphertext format and the API. **Data encrypted by 1.x cannot be read by 2.x** and has to be re-encrypted.
+
+| 1.x | 2.x |
+| --- | --- |
+| `EncryptAsync` / `DecryptAsync` | `Encrypt` / `Decrypt` |
+| `EncryptToBase64Async` / `DecryptFromBase64Async` | `EncryptToBase64` / `DecryptFromBase64` |
+| `SymCryptoOpts` | `CipherOptions` |
+| `IV` setting | removed — a nonce is generated per message |
+| `Salt` optional | required |
+| `AddSymmetricCipher()` | removed — configure it |
+| `HashAlgo.SHA1` | removed |
 
 ## License
 

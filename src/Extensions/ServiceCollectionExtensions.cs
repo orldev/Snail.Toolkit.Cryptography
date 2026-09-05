@@ -1,95 +1,89 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Snail.Toolkit.Cryptography.Entities;
 using Snail.Toolkit.Cryptography.Interfaces;
 
 namespace Snail.Toolkit.Cryptography.Extensions;
 
 /// <summary>
-/// Provides extension methods for <see cref="IServiceCollection"/> to configure symmetric encryption services.
+/// Registers <see cref="ISymmetricCipher"/> and the settings it runs on.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Adds symmetric encryption services to the dependency injection container with optional configuration.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-    /// <param name="options">Optional action to configure <see cref="SymCryptoOpts"/>.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="services"/> is null.</exception>
-    /// <remarks>
-    /// <para>
-    /// When no options are provided, default values will be used:
-    /// - Passphrase: "123456" (INSECURE - for development only)
-    /// - IV: "abcede0123456789" (INSECURE - for development only)
-    /// </para>
-    /// <para>
-    /// SECURITY WARNING: The default values provide no real security and should NEVER be used in production.
-    /// Always provide proper configuration in production environments.
-    /// </para>
-    /// <example>
-    /// Secure configuration example:
-    /// <code>
-    /// services.AddSymmetricCipher(opts => {
-    ///     opts.Passphrase = Configuration["Crypto:Key"];
-    ///     opts.IV = Configuration["Crypto:IV"];
-    ///     opts.Iterations = 600_000;
-    ///     opts.HashMethod = HashAlgo.SHA512;
-    ///     opts.DesiredKeyLength = 32;
-    /// });
-    /// </code>
-    /// </example>
-    /// </remarks>
-    public static IServiceCollection AddSymmetricCipher(
-        this IServiceCollection services, 
-        Action<SymCryptoOpts>? options = null)
+    private const int MinimumIterations = 100_000;
+
+    extension(IServiceCollection services)
     {
-        ArgumentNullException.ThrowIfNull(services);
-        services.Configure(options ??= o =>
+        /// <summary>Registers the cipher, binding its settings from a configuration section.</summary>
+        /// <remarks>
+        /// The section name is a parameter rather than a constant read off <paramref name="configuration"/>.
+        /// The previous overload hard-coded <c>GetSection("Cryptography")</c> while documenting its
+        /// parameter as the section itself, so passing an already-scoped section bound nothing and left
+        /// every setting at its default.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> is null.</exception>
+        /// <exception cref="ArgumentException"><paramref name="sectionName"/> is empty.</exception>
+        public IServiceCollection AddSymmetricCipher(
+            IConfiguration configuration,
+            string sectionName = CipherOptions.SectionName)
         {
-            o.Passphrase = "123456";
-            o.IV = "abcede0123456789";
-        });
-        services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
-        return services;
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
+
+            Validated(services.AddOptions<CipherOptions>().Bind(configuration.GetSection(sectionName)));
+            services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
+
+            return services;
+        }
+
+        /// <summary>Registers the cipher with settings supplied in code.</summary>
+        /// <remarks>
+        /// There is no parameterless overload any more. The one that existed configured the passphrase
+        /// "123456", and because options configuration is additive it silently overwrote a passphrase
+        /// already bound from configuration whenever anything called it a second time.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="configure"/> is null.</exception>
+        public IServiceCollection AddSymmetricCipher(Action<CipherOptions> configure)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(configure);
+
+            Validated(services.AddOptions<CipherOptions>().Configure(configure));
+            services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
+
+            return services;
+        }
     }
-    
-    /// <summary>
-    /// Adds symmetric encryption services to the dependency injection container using configuration.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-    /// <param name="configuration">The <see cref="IConfiguration"/> section containing crypto settings.</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="services"/> or <paramref name="configuration"/> is null.</exception>
+
+    /// <summary>The one place the settings are judged, whichever overload supplied them.</summary>
     /// <remarks>
-    /// <para>
-    /// Expects configuration section with these fields (example appsettings.json):
-    /// <code>
-    /// "Cryptography": {
-    ///     "Passphrase": "secure-passphrase-here",
-    ///     "IV": "base64-encoded-iv-here",
-    ///     "Salt": "base64-encoded-salt-here",
-    ///     "Iterations": 600000,
-    ///     "DesiredKeyLength": 32,
-    ///     "HashMethod": "SHA512"
-    /// }
-    /// </code>
-    /// </para>
-    /// <para>
-    /// SECURITY NOTES:
-    /// - Passphrase should come from secure secret storage, not plain config files
-    /// - IV and Salt should be cryptographically random values
-    /// - Iterations should be ≥ 100,000 for security-sensitive applications
-    /// </para>
+    /// Validation runs at start so that a key length AES cannot take, an undefined hash or a missing
+    /// passphrase stops the host. Each of those used to surface as a <c>CryptographicException</c> on the
+    /// first encryption a real request asked for, long after the process reported itself healthy.
     /// </remarks>
-    public static IServiceCollection AddSymmetricCipher(
-        this IServiceCollection services, 
-        IConfiguration configuration)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        services.Configure<SymCryptoOpts>(configuration.GetSection("Cryptography"));
-        services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
-        return services;
-    }
+    private static void Validated(OptionsBuilder<CipherOptions> builder) =>
+        builder
+            .Validate(
+                settings => !string.IsNullOrWhiteSpace(settings.Passphrase),
+                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Passphrase)}' has to be set.")
+            .Validate(
+                settings => !string.IsNullOrWhiteSpace(settings.Salt),
+                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Salt)}' has to be set, or the derived "
+                + "key is a pure function of the passphrase and precomputable.")
+            .Validate(
+                settings => settings.Iterations >= MinimumIterations,
+                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Iterations)}' has to be at least "
+                + $"{MinimumIterations}.")
+            .Validate(
+                settings => settings.DesiredKeyLength is 16 or 24 or 32,
+                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.DesiredKeyLength)}' has to be 16, 24 or 32, "
+                + "the key sizes AES accepts.")
+            .Validate(
+                settings => Enum.IsDefined(settings.HashMethod),
+                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.HashMethod)}' has to be a defined "
+                + $"{nameof(HashAlgo)} value.")
+            .ValidateOnStart();
 }

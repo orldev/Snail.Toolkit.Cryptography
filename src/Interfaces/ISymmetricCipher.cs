@@ -1,80 +1,40 @@
+using System.Security.Cryptography;
+
 namespace Snail.Toolkit.Cryptography.Interfaces;
 
 /// <summary>
-/// Defines a service for performing symmetric encryption and decryption operations.
+/// Authenticated symmetric encryption over bytes and Base64 text.
 /// </summary>
 /// <remarks>
-/// This interface provides asynchronous methods for encrypting and decrypting data
-/// using symmetric key algorithms (typically AES). It supports both raw byte array
-/// and Base64-encoded string formats.
+/// The operations are synchronous because they are pure CPU work over memory. They were asynchronous,
+/// which allocated a state machine and a task per call, completed synchronously anyway, and hid the one
+/// cost that genuinely blocked a thread — key derivation, now paid once at construction.
 /// </remarks>
 public interface ISymmetricCipher
 {
-    /// <summary>
-    /// Encrypts the specified byte array and returns the ciphertext as a byte array.
-    /// </summary>
-    /// <param name="plainText">The plaintext byte array to encrypt.</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains
-    /// the encrypted ciphertext as a byte array.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="plainText"/> is null.</exception>
-    /// <exception cref="CryptographicException">Thrown when encryption fails.</exception>
+    /// <summary>Encrypts bytes into a self-describing envelope.</summary>
     /// <remarks>
-    /// This method is suitable for binary data encryption. The output includes both
-    /// the IV and ciphertext in a single byte array.
+    /// The result carries its own version byte, nonce and authentication tag, so it can be stored on its
+    /// own and decrypted without any out-of-band parameter.
     /// </remarks>
-    Task<byte[]> EncryptAsync(byte[] plainText);
+    /// <exception cref="ArgumentNullException"><paramref name="plainText"/> is null.</exception>
+    byte[] Encrypt(byte[] plainText);
 
-    /// <summary>
-    /// Encrypts the specified plaintext string and returns the ciphertext as a Base64-encoded string.
-    /// </summary>
-    /// <param name="clearText">The plaintext string to encrypt.</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains
-    /// the encrypted ciphertext as a Base64-encoded string.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="clearText"/> is null.</exception>
-    /// <exception cref="CryptographicException">Thrown when encryption fails.</exception>
-    /// <remarks>
-    /// This method is convenient for scenarios where the ciphertext needs to be
-    /// stored or transmitted as text (e.g., in JSON, XML, or URLs).
-    /// The output includes both the IV and ciphertext encoded as a single Base64 string.
-    /// </remarks>
-    Task<string> EncryptToBase64Async(string clearText);
+    /// <summary>Decrypts an envelope produced by <see cref="Encrypt"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="cipherText"/> is null.</exception>
+    /// <exception cref="CryptographicException">
+    /// The envelope is truncated, carries an unknown version, or fails authentication because it was
+    /// altered or was produced under a different key.
+    /// </exception>
+    byte[] Decrypt(byte[] cipherText);
 
-    /// <summary>
-    /// Decrypts the specified encrypted byte array and returns the original plaintext as a byte array.
-    /// </summary>
-    /// <param name="encrypted">The encrypted byte array to decrypt.</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains
-    /// the decrypted plaintext as a byte array.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="encrypted"/> is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="encrypted"/> is empty or malformed.</exception>
-    /// <exception cref="CryptographicException">Thrown when decryption fails (invalid key, corrupted data, etc.).</exception>
-    /// <remarks>
-    /// This method is the counterpart to <see cref="EncryptAsync"/>, handling binary ciphertext
-    /// that was produced by the encryption method.
-    /// </remarks>
-    Task<byte[]> DecryptAsync(byte[] encrypted);
+    /// <summary>Encrypts text and returns the envelope as Base64.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="clearText"/> is null.</exception>
+    string EncryptToBase64(string clearText);
 
-    /// <summary>
-    /// Decrypts the specified Base64-encoded ciphertext and returns the original plaintext.
-    /// </summary>
-    /// <param name="encrypted">The Base64-encoded ciphertext string to decrypt.</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains
-    /// the decrypted plaintext string.
-    /// </returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="encrypted"/> is null.</exception>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="encrypted"/> is empty or malformed.</exception>
-    /// <exception cref="FormatException">Thrown when the input is not valid Base64.</exception>
-    /// <exception cref="CryptographicException">Thrown when decryption fails (invalid key, corrupted data, etc.).</exception>
-    /// <remarks>
-    /// This method is the counterpart to <see cref="EncryptToBase64Async"/>, handling
-    /// ciphertext that was encoded as Base64 for text-based storage or transmission.
-    /// </remarks>
-    Task<string> DecryptFromBase64Async(string encrypted);
+    /// <summary>Decrypts Base64 produced by <see cref="EncryptToBase64"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="cipherText"/> is null.</exception>
+    /// <exception cref="FormatException"><paramref name="cipherText"/> is not valid Base64.</exception>
+    /// <exception cref="CryptographicException">The envelope is truncated, unknown or fails authentication.</exception>
+    string DecryptFromBase64(string cipherText);
 }

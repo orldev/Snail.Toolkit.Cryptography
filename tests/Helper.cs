@@ -1,26 +1,36 @@
 using Microsoft.Extensions.Configuration;
+using Snail.Toolkit.Cryptography.Entities;
+using Snail.Toolkit.Cryptography.Extensions;
+using Snail.Toolkit.Cryptography.Interfaces;
 
 namespace Snail.Toolkit.Cryptography.Tests;
 
 public static class Helper
 {
-    public static string Client = "Cryptography";
-    
-    public static readonly Dictionary<string, string> InMemorySettings = new () {
-        {$"{Client}:Passphrase", "0123456789"},
-        {$"{Client}:IV", "abcede0123456789"},
-        {$"{Client}:Salt", "0123456789abcede"},
-        {$"{Client}:Iterations", "1000"},
-        {$"{Client}:DesiredKeyLength", "16"},
-        {$"{Client}:HashMethod", "SHA512"}
+    public const string Section = CipherOptions.SectionName;
+
+    public static readonly Dictionary<string, string?> Settings = new()
+    {
+        [$"{Section}:{nameof(CipherOptions.Passphrase)}"] = "0123456789",
+        [$"{Section}:{nameof(CipherOptions.Salt)}"] = "0123456789abcede",
+        [$"{Section}:{nameof(CipherOptions.Iterations)}"] = "100000",
+        [$"{Section}:{nameof(CipherOptions.DesiredKeyLength)}"] = "32",
+        [$"{Section}:{nameof(CipherOptions.HashMethod)}"] = "SHA512"
     };
 
-    public static IConfiguration GetConfiguration()
-    {
-        IConfiguration configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(InMemorySettings!)
-            .Build();
+    public static IConfiguration Configuration(Dictionary<string, string?>? settings = null) =>
+        new ConfigurationBuilder().AddInMemoryCollection(settings ?? Settings).Build();
 
-        return configuration;
+    public static ISymmetricCipher Cipher(Action<CipherOptions>? configure = null) =>
+        new ServiceCollection()
+            .AddSymmetricCipher(configure ?? Defaults)
+            .BuildServiceProvider()
+            .GetRequiredService<ISymmetricCipher>();
+
+    public static void Defaults(CipherOptions options)
+    {
+        options.Passphrase = "0123456789";
+        options.Salt = "0123456789abcede";
+        options.Iterations = 100_000;
     }
 }
