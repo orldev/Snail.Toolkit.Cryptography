@@ -1,4 +1,4 @@
-namespace Toolkit.Cryptography.Interfaces;
+namespace Snail.Toolkit.Cryptography.Interfaces;
 
 /// <summary>
 /// Defines a service for performing symmetric encryption and decryption operations.

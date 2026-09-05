@@ -1,4 +1,4 @@
-namespace Toolkit.Cryptography.Entities;
+namespace Snail.Toolkit.Cryptography.Entities;
 
 /// <summary>
 /// Specifies the byte lengths of hash outputs for various cryptographic hash algorithms.

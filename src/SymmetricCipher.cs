@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using Toolkit.Cryptography.Entities;
-using Toolkit.Cryptography.Interfaces;
+using Snail.Toolkit.Cryptography.Entities;
+using Snail.Toolkit.Cryptography.Interfaces;
 
-namespace Toolkit.Cryptography;
+namespace Snail.Toolkit.Cryptography;
 
 /// <summary>
 /// Provides symmetric encryption/decryption services using AES with PBKDF2 key derivation.

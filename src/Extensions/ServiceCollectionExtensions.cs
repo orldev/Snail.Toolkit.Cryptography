@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Toolkit.Cryptography.Entities;
-using Toolkit.Cryptography.Interfaces;
+using Snail.Toolkit.Cryptography.Entities;
+using Snail.Toolkit.Cryptography.Interfaces;
 
-namespace Toolkit.Cryptography.Extensions;
+namespace Snail.Toolkit.Cryptography.Extensions;
 
 /// <summary>
 /// Provides extension methods for <see cref="IServiceCollection"/> to configure symmetric encryption services.

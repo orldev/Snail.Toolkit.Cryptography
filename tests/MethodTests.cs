@@ -1,7 +1,7 @@
-using Toolkit.Cryptography.Extensions;
-using Toolkit.Cryptography.Interfaces;
+using Snail.Toolkit.Cryptography.Extensions;
+using Snail.Toolkit.Cryptography.Interfaces;
 
-namespace Toolkit.Cryptography.Tests;
+namespace Snail.Toolkit.Cryptography.Tests;
 
 public class MethodTests
 {

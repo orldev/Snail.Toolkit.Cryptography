@@ -1,4 +1,4 @@
-namespace Toolkit.Cryptography.Entities;
+namespace Snail.Toolkit.Cryptography.Entities;
 
 /// <summary>
 /// Represents configuration options for asymmetric cryptography operations.

@@ -1,4 +1,4 @@
-# Toolkit.Cryptography
+# Snail.Toolkit.Cryptography
 
 A robust extension for `System.Security.Cryptography` providing simplified symmetric encryption using AES with PBKDF2 key derivation.
 
@@ -121,4 +121,4 @@ var rawBytes = await _crypto.DecryptAsync(rawCipher);
 
 ## License
 
-Toolkit.Cryptography is a free and open source project, released under the permissible [MIT license](LICENSE).
+Snail.Toolkit.Cryptography is a free and open source project, released under the permissible [MIT license](LICENSE).

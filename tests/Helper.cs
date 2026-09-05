@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace Toolkit.Cryptography.Tests;
+namespace Snail.Toolkit.Cryptography.Tests;
 
 public static class Helper
 {

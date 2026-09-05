@@ -1,4 +1,4 @@
-namespace Toolkit.Cryptography.Entities;
+namespace Snail.Toolkit.Cryptography.Entities;
 
 /// <summary>
 /// Represents the parameters required for symmetric encryption using PBKDF2 key derivation and AES.

@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
-namespace Toolkit.Cryptography.Entities;
+namespace Snail.Toolkit.Cryptography.Entities;
 
 /// <summary>
 /// Represents configuration options for symmetric cryptography operations using AES.

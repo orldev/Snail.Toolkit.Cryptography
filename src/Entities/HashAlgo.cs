@@ -1,4 +1,4 @@
-namespace Toolkit.Cryptography.Entities;
+namespace Snail.Toolkit.Cryptography.Entities;
 
 /// <summary>
 /// Specifies cryptographic hash algorithms available for security operations.

@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toolkit.Cryptography", "src\Toolkit.Cryptography.csproj", "{2D96A7C3-2D49-4F8F-A2C7-B46C67350192}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Snail.Toolkit.Cryptography", "src\Snail.Toolkit.Cryptography.csproj", "{2D96A7C3-2D49-4F8F-A2C7-B46C67350192}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toolkit.Cryptography.Tests", "tests\Toolkit.Cryptography.Tests.csproj", "{E26E5A11-43A2-4FC5-BC05-9EABF90F9C07}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Snail.Toolkit.Cryptography.Tests", "tests\Snail.Toolkit.Cryptography.Tests.csproj", "{E26E5A11-43A2-4FC5-BC05-9EABF90F9C07}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

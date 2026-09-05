@@ -1,11 +1,11 @@
 global using Xunit;
 global using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Toolkit.Cryptography.Entities;
-using Toolkit.Cryptography.Extensions;
-using Toolkit.Cryptography.Interfaces;
+using Snail.Toolkit.Cryptography.Entities;
+using Snail.Toolkit.Cryptography.Extensions;
+using Snail.Toolkit.Cryptography.Interfaces;
 
-namespace Toolkit.Cryptography.Tests;
+namespace Snail.Toolkit.Cryptography.Tests;
 
 public class ServiceCollectionExtensionsTests
 {
