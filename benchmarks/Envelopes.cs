@@ -26,7 +26,7 @@ public class Envelopes
     [Params(32, 1024)]
     public int Length { get; set; }
 
-    /// <summary>Derives the key once and seals the inputs the opening benchmarks read.</summary>
+    /// <summary>Derives the key once, seals the inputs the opening benchmarks read and checks that both paths round-trip.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -42,6 +42,12 @@ public class Envelopes
         _plainBytes = Encoding.UTF8.GetBytes(_plainText);
         _sealedBytes = _cipher.Encrypt(_plainBytes);
         _sealedText = _cipher.EncryptToBase64(_plainText);
+
+        if (!_cipher.Decrypt(_sealedBytes).AsSpan().SequenceEqual(_plainBytes))
+            throw new InvalidOperationException("The bytes did not round-trip.");
+
+        if (_cipher.DecryptFromBase64(_sealedText) != _plainText || _cipher.DecryptFromBase64(Convert.ToBase64String(_sealedBytes)) != _plainText)
+            throw new InvalidOperationException("The Base64 text did not round-trip, or the two paths seal different envelopes.");
     }
 
     /// <summary>Seals bytes into an envelope.</summary>

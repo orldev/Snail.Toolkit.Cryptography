@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -35,6 +36,7 @@ public sealed class SymmetricCipher : ISymmetricCipher
     private const int TagOffset = NonceOffset + NonceLength;
     private const int TagLength = 16;
     private const int HeaderLength = TagOffset + TagLength;
+    private const int StackLimit = 256;
 
     private readonly byte[] _key;
 
@@ -61,15 +63,7 @@ public sealed class SymmetricCipher : ISymmetricCipher
         ArgumentNullException.ThrowIfNull(plainText);
 
         var envelope = new byte[HeaderLength + plainText.Length];
-        envelope[0] = Version;
-        RandomNumberGenerator.Fill(envelope.AsSpan(NonceOffset, NonceLength));
-
-        using var aes = new AesGcm(_key, TagLength);
-        aes.Encrypt(
-            envelope.AsSpan(NonceOffset, NonceLength),
-            plainText,
-            envelope.AsSpan(HeaderLength),
-            envelope.AsSpan(TagOffset, TagLength));
+        Seal(plainText, envelope);
 
         return envelope;
     }
@@ -79,38 +73,128 @@ public sealed class SymmetricCipher : ISymmetricCipher
     {
         ArgumentNullException.ThrowIfNull(cipherText);
 
-        if (cipherText.Length < HeaderLength)
-            throw new CryptographicException("The ciphertext is shorter than one envelope header.");
-
-        if (cipherText[0] != Version)
-            throw new CryptographicException($"Ciphertext version {cipherText[0]} is not supported.");
+        MustBeAnEnvelope(cipherText);
 
         var plainText = new byte[cipherText.Length - HeaderLength];
-
-        using var aes = new AesGcm(_key, TagLength);
-        aes.Decrypt(
-            cipherText.AsSpan(NonceOffset, NonceLength),
-            cipherText.AsSpan(HeaderLength),
-            cipherText.AsSpan(TagOffset, TagLength),
-            plainText);
+        Open(cipherText, plainText);
 
         return plainText;
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The UTF-8 bytes and the envelope live in scratch memory — the stack up to 256 bytes, the shared pool
+    /// beyond — rather than in two arrays per call, and the plaintext is wiped before the scratch is given back.
+    /// </remarks>
     public string EncryptToBase64(string clearText)
     {
         ArgumentNullException.ThrowIfNull(clearText);
 
-        return Convert.ToBase64String(Encrypt(Encoding.UTF8.GetBytes(clearText)));
+        int length = Encoding.UTF8.GetByteCount(clearText);
+        byte[]? pooledText = length > StackLimit ? ArrayPool<byte>.Shared.Rent(length) : null;
+        byte[]? pooledEnvelope = HeaderLength + length > StackLimit ? ArrayPool<byte>.Shared.Rent(HeaderLength + length) : null;
+        Span<byte> plainText = (pooledText ?? stackalloc byte[StackLimit])[..length];
+        Span<byte> envelope = (pooledEnvelope ?? stackalloc byte[StackLimit])[..(HeaderLength + length)];
+
+        try
+        {
+            Encoding.UTF8.GetBytes(clearText, plainText);
+            Seal(plainText, envelope);
+
+            return Convert.ToBase64String(envelope);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plainText);
+            Return(pooledText);
+            Return(pooledEnvelope);
+        }
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The decoded envelope and the plaintext live in scratch memory, as in <see cref="EncryptToBase64"/>. Text
+    /// that does not decode is handed to <see cref="Convert.FromBase64String"/>, so it is refused with the very
+    /// exception it always was.
+    /// </remarks>
     public string DecryptFromBase64(string cipherText)
     {
         ArgumentNullException.ThrowIfNull(cipherText);
 
-        return Encoding.UTF8.GetString(Decrypt(Convert.FromBase64String(cipherText)));
+        int capacity = cipherText.Length / 4 * 3;
+        byte[]? pooledEnvelope = capacity > StackLimit ? ArrayPool<byte>.Shared.Rent(capacity) : null;
+        Span<byte> decoded = (pooledEnvelope ?? stackalloc byte[StackLimit])[..capacity];
+
+        try
+        {
+            if (!Convert.TryFromBase64String(cipherText, decoded, out int written))
+                return Encoding.UTF8.GetString(Decrypt(Convert.FromBase64String(cipherText)));
+
+            return Opened(decoded[..written]);
+        }
+        finally
+        {
+            Return(pooledEnvelope);
+        }
+    }
+
+    private static void MustBeAnEnvelope(ReadOnlySpan<byte> cipherText)
+    {
+        if (cipherText.Length < HeaderLength)
+            throw new CryptographicException("The ciphertext is shorter than one envelope header.");
+
+        if (cipherText[0] != Version)
+            throw new CryptographicException($"Ciphertext version {cipherText[0]} is not supported.");
+    }
+
+    private static void Return(byte[]? pooled)
+    {
+        if (pooled is not null)
+            ArrayPool<byte>.Shared.Return(pooled);
+    }
+
+    private string Opened(ReadOnlySpan<byte> envelope)
+    {
+        MustBeAnEnvelope(envelope);
+
+        int length = envelope.Length - HeaderLength;
+        byte[]? pooledText = length > StackLimit ? ArrayPool<byte>.Shared.Rent(length) : null;
+        Span<byte> plainText = (pooledText ?? stackalloc byte[StackLimit])[..length];
+
+        try
+        {
+            Open(envelope, plainText);
+
+            return Encoding.UTF8.GetString(plainText);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(plainText);
+            Return(pooledText);
+        }
+    }
+
+    private void Seal(ReadOnlySpan<byte> plainText, Span<byte> envelope)
+    {
+        envelope[0] = Version;
+        RandomNumberGenerator.Fill(envelope.Slice(NonceOffset, NonceLength));
+
+        using var aes = new AesGcm(_key, TagLength);
+        aes.Encrypt(
+            envelope.Slice(NonceOffset, NonceLength),
+            plainText,
+            envelope[HeaderLength..],
+            envelope.Slice(TagOffset, TagLength));
+    }
+
+    private void Open(ReadOnlySpan<byte> envelope, Span<byte> plainText)
+    {
+        using var aes = new AesGcm(_key, TagLength);
+        aes.Decrypt(
+            envelope.Slice(NonceOffset, NonceLength),
+            envelope[HeaderLength..],
+            envelope.Slice(TagOffset, TagLength),
+            plainText);
     }
 
     private static HashAlgorithmName HashName(HashAlgo method) => method switch
