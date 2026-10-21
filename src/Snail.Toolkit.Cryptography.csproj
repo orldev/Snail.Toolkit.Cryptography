@@ -18,6 +18,14 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
+
+    <!--
+      Settings are bound by the configuration binding source generator, not by reflection: in a native app the
+      reflection binder binds nothing, and AddSymmetricCipher(configuration) failed at its first resolve.
+    -->
+    <PropertyGroup>
+        <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+    </PropertyGroup>
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
