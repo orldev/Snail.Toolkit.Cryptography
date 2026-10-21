@@ -1,0 +1,35 @@
+#nullable enable
+Snail.Toolkit.Cryptography.Entities.CipherOptions
+Snail.Toolkit.Cryptography.Entities.CipherOptions.CipherOptions() -> void
+Snail.Toolkit.Cryptography.Entities.CipherOptions.DesiredKeyLength.get -> int
+Snail.Toolkit.Cryptography.Entities.CipherOptions.DesiredKeyLength.set -> void
+Snail.Toolkit.Cryptography.Entities.CipherOptions.HashMethod.get -> Snail.Toolkit.Cryptography.Entities.HashAlgo
+Snail.Toolkit.Cryptography.Entities.CipherOptions.HashMethod.set -> void
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Iterations.get -> int
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Iterations.set -> void
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Passphrase.get -> string?
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Passphrase.set -> void
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Salt.get -> string?
+Snail.Toolkit.Cryptography.Entities.CipherOptions.Salt.set -> void
+Snail.Toolkit.Cryptography.Entities.HashAlgo
+Snail.Toolkit.Cryptography.Entities.HashAlgo.SHA256 = 256 -> Snail.Toolkit.Cryptography.Entities.HashAlgo
+Snail.Toolkit.Cryptography.Entities.HashAlgo.SHA384 = 384 -> Snail.Toolkit.Cryptography.Entities.HashAlgo
+Snail.Toolkit.Cryptography.Entities.HashAlgo.SHA512 = 512 -> Snail.Toolkit.Cryptography.Entities.HashAlgo
+Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions
+Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
+Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddSymmetricCipher(Microsoft.Extensions.Configuration.IConfiguration! configuration, string! sectionName = "Cryptography") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddSymmetricCipher(System.Action<Snail.Toolkit.Cryptography.Entities.CipherOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher
+Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher.Decrypt(byte[]! cipherText) -> byte[]!
+Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher.DecryptFromBase64(string! cipherText) -> string!
+Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher.Encrypt(byte[]! plainText) -> byte[]!
+Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher.EncryptToBase64(string! clearText) -> string!
+Snail.Toolkit.Cryptography.SymmetricCipher
+Snail.Toolkit.Cryptography.SymmetricCipher.Decrypt(byte[]! cipherText) -> byte[]!
+Snail.Toolkit.Cryptography.SymmetricCipher.DecryptFromBase64(string! cipherText) -> string!
+Snail.Toolkit.Cryptography.SymmetricCipher.Encrypt(byte[]! plainText) -> byte[]!
+Snail.Toolkit.Cryptography.SymmetricCipher.EncryptToBase64(string! clearText) -> string!
+Snail.Toolkit.Cryptography.SymmetricCipher.SymmetricCipher(Microsoft.Extensions.Options.IOptions<Snail.Toolkit.Cryptography.Entities.CipherOptions!>! options) -> void
+const Snail.Toolkit.Cryptography.Entities.CipherOptions.SectionName = "Cryptography" -> string!
+static Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.AddSymmetricCipher(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! sectionName = "Cryptography") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.AddSymmetricCipher(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Snail.Toolkit.Cryptography.Entities.CipherOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

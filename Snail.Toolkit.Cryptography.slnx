@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="benchmarks/Snail.Toolkit.Cryptography.Benchmarks.csproj" />
   <Project Path="src/Snail.Toolkit.Cryptography.csproj" />
+  <Project Path="tests/Snail.Toolkit.Cryptography.NativeProbe/Snail.Toolkit.Cryptography.NativeProbe.csproj" />
   <Project Path="tests/Snail.Toolkit.Cryptography.Tests.csproj" />
 </Solution>
