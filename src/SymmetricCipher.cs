@@ -97,15 +97,72 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
         CryptographicOperations.ZeroMemory(_key);
     }
 
+    /// <summary>The length of the envelope that seals a plaintext of the given length.</summary>
+    /// <remarks>
+    /// The envelope is the plaintext plus a header of 29 bytes: the version, a 12-byte nonce and a 16-byte tag.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="plainTextLength"/> is negative, or so large that no array holds the envelope.
+    /// </exception>
+    public static int EnvelopeLength(int plainTextLength)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(plainTextLength);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(plainTextLength, Array.MaxLength - HeaderLength);
+
+        return HeaderLength + plainTextLength;
+    }
+
     /// <inheritdoc />
     public byte[] Encrypt(byte[] plainText)
     {
         ArgumentNullException.ThrowIfNull(plainText);
 
-        var envelope = new byte[HeaderLength + plainText.Length];
+        var envelope = new byte[EnvelopeLength(plainText.Length)];
         Seal(plainText, envelope);
 
         return envelope;
+    }
+
+    /// <summary>Seals bytes into an envelope the caller provides, with nothing allocated.</summary>
+    /// <remarks>
+    /// The envelope and the plaintext must not overlap. When <paramref name="envelope"/> is too short nothing is
+    /// written and <paramref name="written"/> says how long it has to be, <see cref="EnvelopeLength"/> of the
+    /// plaintext.
+    /// </remarks>
+    /// <returns>Whether the envelope fitted.</returns>
+    public bool TryEncrypt(ReadOnlySpan<byte> plainText, Span<byte> envelope, out int written)
+    {
+        written = EnvelopeLength(plainText.Length);
+        if (envelope.Length < written)
+            return false;
+
+        Seal(plainText, envelope[..written]);
+
+        return true;
+    }
+
+    /// <summary>Opens an envelope into a buffer the caller provides, with nothing allocated.</summary>
+    /// <remarks>
+    /// The buffers must not overlap. A short <paramref name="plainText"/> is answered with <c>false</c> and the
+    /// length needed in <paramref name="written"/>; a bad envelope is never answered with <c>false</c>, so that a
+    /// forgery can not be mistaken for a sizing mistake.
+    /// </remarks>
+    /// <returns>Whether the plaintext fitted.</returns>
+    /// <exception cref="CryptographicException">
+    /// The envelope is truncated, carries an unknown version, or fails authentication because it was altered or was
+    /// produced under a different key.
+    /// </exception>
+    public bool TryDecrypt(ReadOnlySpan<byte> envelope, Span<byte> plainText, out int written)
+    {
+        MustBeAnEnvelope(envelope);
+
+        written = envelope.Length - HeaderLength;
+        if (plainText.Length < written)
+            return false;
+
+        Open(envelope, plainText[..written]);
+
+        return true;
     }
 
     /// <inheritdoc />

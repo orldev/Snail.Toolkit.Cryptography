@@ -194,6 +194,78 @@ public class MethodTests
         Assert.Null(error);
     }
 
+    [Fact]
+    public void TryEncrypt_IntoAnExactBuffer_SealsAnEnvelopeDecryptOpens()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        byte[] plainText = [1, 2, 3, 4, 5];
+        var envelope = new byte[SymmetricCipher.EnvelopeLength(plainText.Length)];
+
+        bool isSealed = cipher.TryEncrypt(plainText, envelope, out int written);
+
+        Assert.True(isSealed);
+        Assert.Equal(envelope.Length, written);
+        Assert.Equal(plainText, cipher.Decrypt(envelope));
+    }
+
+    [Fact]
+    public void TryEncrypt_IntoAShortBuffer_ReturnsFalseAndTheLengthNeeded()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        var envelope = new byte[10];
+
+        bool isSealed = cipher.TryEncrypt([1, 2, 3], envelope, out int written);
+
+        Assert.False(isSealed);
+        Assert.Equal(SymmetricCipher.EnvelopeLength(3), written);
+        Assert.All(envelope, value => Assert.Equal(0, value));
+    }
+
+    [Fact]
+    public void TryDecrypt_IntoABufferOfTheRightLength_OpensTheEnvelope()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        var envelope = cipher.Encrypt([9, 8, 7]);
+        var plainText = new byte[3];
+
+        bool isOpened = cipher.TryDecrypt(envelope, plainText, out int written);
+
+        Assert.True(isOpened);
+        Assert.Equal(3, written);
+        Assert.Equal([9, 8, 7], plainText);
+    }
+
+    [Fact]
+    public void TryDecrypt_IntoAShortBuffer_ReturnsFalse()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        var envelope = cipher.Encrypt([9, 8, 7]);
+
+        bool isOpened = cipher.TryDecrypt(envelope, new byte[2], out int written);
+
+        Assert.False(isOpened);
+        Assert.Equal(3, written);
+    }
+
+    /// <summary>
+    /// A forgery must never look like a sizing mistake: a bad envelope throws, it is not answered with false.
+    /// </summary>
+    [Fact]
+    public void TryDecrypt_AlteredEnvelope_Throws()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        var envelope = cipher.Encrypt([9, 8, 7]);
+        envelope[^1] ^= 0xFF;
+
+        Assert.ThrowsAny<CryptographicException>(() => cipher.TryDecrypt(envelope, new byte[3], out _));
+    }
+
+    [Fact]
+    public void EnvelopeLength_OfAPlaintextNoArrayCanCarry_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => SymmetricCipher.EnvelopeLength(int.MaxValue));
+    }
+
     private static CipherOptions Settings()
     {
         var settings = new CipherOptions();

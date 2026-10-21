@@ -21,6 +21,8 @@ public class Envelopes
     private byte[] _sealedBytes = [];
     private string _plainText = string.Empty;
     private string _sealedText = string.Empty;
+    private byte[] _envelopeBuffer = [];
+    private byte[] _plainBuffer = [];
 
     /// <summary>Length of the plaintext in bytes: a short secret and a kilobyte document.</summary>
     [Params(32, 1024)]
@@ -42,6 +44,8 @@ public class Envelopes
         _plainBytes = Encoding.UTF8.GetBytes(_plainText);
         _sealedBytes = _cipher.Encrypt(_plainBytes);
         _sealedText = _cipher.EncryptToBase64(_plainText);
+        _envelopeBuffer = new byte[SymmetricCipher.EnvelopeLength(Length)];
+        _plainBuffer = new byte[Length];
 
         if (!_cipher.Decrypt(_sealedBytes).AsSpan().SequenceEqual(_plainBytes))
             throw new InvalidOperationException("The bytes did not round-trip.");
@@ -69,4 +73,12 @@ public class Envelopes
     /// <summary>Opens a Base64 envelope into text.</summary>
     [Benchmark]
     public string DecryptFromBase64() => _cipher.DecryptFromBase64(_sealedText);
+
+    /// <summary>Seals bytes into a buffer of the caller's: the path that allocates nothing.</summary>
+    [Benchmark]
+    public bool TryEncrypt() => _cipher.TryEncrypt(_plainBytes, _envelopeBuffer, out _);
+
+    /// <summary>Opens an envelope into a buffer of the caller's: the path that allocates nothing.</summary>
+    [Benchmark]
+    public bool TryDecrypt() => _cipher.TryDecrypt(_sealedBytes, _plainBuffer, out _);
 }
