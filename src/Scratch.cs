@@ -17,7 +17,7 @@ namespace Snail.Toolkit.Cryptography;
 /// rents. An envelope is public and is only returned.
 /// </para>
 /// </remarks>
-internal ref struct Scratch
+internal readonly ref struct Scratch
 {
     private readonly byte[]? _rented;
     private readonly bool _isSecret;

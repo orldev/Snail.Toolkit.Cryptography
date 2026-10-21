@@ -5,7 +5,7 @@ using Snail.Toolkit.Cryptography.Interfaces;
 
 namespace Snail.Toolkit.Cryptography.Tests;
 
-public static class Helper
+public static class Ciphers
 {
     public const string Section = CipherOptions.SectionName;
 

@@ -1,7 +1,6 @@
 <Project Sdk="Snail.Sdk.Library">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
         <PackageId>Snail.Toolkit.Cryptography</PackageId>
         <PackageTags>System.Security.Cryptography</PackageTags>
         <Title>Snail.Toolkit.Cryptography</Title>

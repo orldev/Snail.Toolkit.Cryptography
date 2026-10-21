@@ -6,9 +6,9 @@ using Snail.Toolkit.Cryptography.Interfaces;
 
 namespace Snail.Toolkit.Cryptography.Tests;
 
-public class MethodTests
+public class SymmetricCipherTests
 {
-    private readonly ISymmetricCipher _cipher = Helper.Cipher();
+    private readonly ISymmetricCipher _cipher = Ciphers.Cipher();
 
     [Fact]
     public void Encrypt_RoundTrip_ReturnsTheOriginalBytes()
@@ -91,9 +91,9 @@ public class MethodTests
     [Fact]
     public void Decrypt_CiphertextFromAnotherPassphrase_Throws()
     {
-        var other = Helper.Cipher(options =>
+        var other = Ciphers.Cipher(options =>
         {
-            Helper.Defaults(options);
+            Ciphers.Defaults(options);
             options.Passphrase = "a different secret";
         });
 
@@ -138,15 +138,15 @@ public class MethodTests
     [Fact]
     public void Encrypt_TwoDifferentNonAsciiSalts_ProduceKeysThatCannotReadEachOther()
     {
-        var first = Helper.Cipher(options =>
+        var first = Ciphers.Cipher(options =>
         {
-            Helper.Defaults(options);
+            Ciphers.Defaults(options);
             options.Salt = "солёныйсолёный12";
         });
 
-        var second = Helper.Cipher(options =>
+        var second = Ciphers.Cipher(options =>
         {
-            Helper.Defaults(options);
+            Ciphers.Defaults(options);
             options.Salt = "другойдругойдр12";
         });
 
@@ -197,7 +197,7 @@ public class MethodTests
     [Fact]
     public void TryEncrypt_IntoAnExactBuffer_SealsAnEnvelopeDecryptOpens()
     {
-        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        using var cipher = new SymmetricCipher(Options.Create(Settings()));
         byte[] plainText = [1, 2, 3, 4, 5];
         var envelope = new byte[SymmetricCipher.EnvelopeLength(plainText.Length)];
 
@@ -211,7 +211,7 @@ public class MethodTests
     [Fact]
     public void TryEncrypt_IntoAShortBuffer_ReturnsFalseAndTheLengthNeeded()
     {
-        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        using var cipher = new SymmetricCipher(Options.Create(Settings()));
         var envelope = new byte[10];
 
         bool isSealed = cipher.TryEncrypt([1, 2, 3], envelope, out int written);
@@ -224,7 +224,7 @@ public class MethodTests
     [Fact]
     public void TryDecrypt_IntoABufferOfTheRightLength_OpensTheEnvelope()
     {
-        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        using var cipher = new SymmetricCipher(Options.Create(Settings()));
         var envelope = cipher.Encrypt([9, 8, 7]);
         var plainText = new byte[3];
 
@@ -238,7 +238,7 @@ public class MethodTests
     [Fact]
     public void TryDecrypt_IntoAShortBuffer_ReturnsFalse()
     {
-        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        using var cipher = new SymmetricCipher(Options.Create(Settings()));
         var envelope = cipher.Encrypt([9, 8, 7]);
 
         bool isOpened = cipher.TryDecrypt(envelope, new byte[2], out int written);
@@ -253,7 +253,7 @@ public class MethodTests
     [Fact]
     public void TryDecrypt_AlteredEnvelope_Throws()
     {
-        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        using var cipher = new SymmetricCipher(Options.Create(Settings()));
         var envelope = cipher.Encrypt([9, 8, 7]);
         envelope[^1] ^= 0xFF;
 
@@ -269,7 +269,7 @@ public class MethodTests
     private static CipherOptions Settings()
     {
         var settings = new CipherOptions();
-        Helper.Defaults(settings);
+        Ciphers.Defaults(settings);
 
         return settings;
     }

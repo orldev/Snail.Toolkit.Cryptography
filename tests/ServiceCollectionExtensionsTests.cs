@@ -14,7 +14,7 @@ public class ServiceCollectionExtensionsTests
     public void AddSymmetricCipher_FromConfiguration_ResolvesTheCipher()
     {
         var provider = new ServiceCollection()
-            .AddSymmetricCipher(Helper.Configuration())
+            .AddSymmetricCipher(Ciphers.Configuration())
             .BuildServiceProvider();
 
         Assert.NotNull(provider.GetService<ISymmetricCipher>());
@@ -23,7 +23,7 @@ public class ServiceCollectionExtensionsTests
     [Fact]
     public void AddSymmetricCipher_FromConfiguration_BindsEverySetting()
     {
-        var options = Options(Helper.Configuration());
+        var options = Options(Ciphers.Configuration());
 
         Assert.Equal("0123456789", options.Passphrase);
         Assert.Equal("0123456789abcede", options.Salt);
@@ -38,11 +38,11 @@ public class ServiceCollectionExtensionsTests
     [Fact]
     public void AddSymmetricCipher_FromACustomSection_BindsIt()
     {
-        var settings = Helper.Settings.ToDictionary(
-            entry => entry.Key.Replace(Helper.Section, "Custom", StringComparison.Ordinal),
+        var settings = Ciphers.Settings.ToDictionary(
+            entry => entry.Key.Replace(Ciphers.Section, "Custom", StringComparison.Ordinal),
             entry => entry.Value);
 
-        var options = Options(Helper.Configuration(settings), "Custom");
+        var options = Options(Ciphers.Configuration(settings), "Custom");
 
         Assert.Equal("0123456789", options.Passphrase);
     }
@@ -65,7 +65,7 @@ public class ServiceCollectionExtensionsTests
         AssertRejected(
             options =>
             {
-                Helper.Defaults(options);
+                Ciphers.Defaults(options);
                 options.DesiredKeyLength = 20;
             },
             nameof(CipherOptions.DesiredKeyLength));
@@ -77,7 +77,7 @@ public class ServiceCollectionExtensionsTests
         AssertRejected(
             options =>
             {
-                Helper.Defaults(options);
+                Ciphers.Defaults(options);
                 options.Iterations = 1000;
             },
             nameof(CipherOptions.Iterations));
@@ -89,7 +89,7 @@ public class ServiceCollectionExtensionsTests
         AssertRejected(
             options =>
             {
-                Helper.Defaults(options);
+                Ciphers.Defaults(options);
                 options.HashMethod = (HashAlgo)999;
             },
             nameof(CipherOptions.HashMethod));
@@ -106,7 +106,7 @@ public class ServiceCollectionExtensionsTests
     public void AddSymmetricCipher_WithAnEmptySectionName_Throws()
     {
         Assert.Throws<ArgumentException>(
-            () => new ServiceCollection().AddSymmetricCipher(Helper.Configuration(), " "));
+            () => new ServiceCollection().AddSymmetricCipher(Ciphers.Configuration(), " "));
     }
 
     private static CipherOptions Options(IConfiguration configuration, string? sectionName = null) =>
