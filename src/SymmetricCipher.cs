@@ -27,10 +27,12 @@ namespace Snail.Toolkit.Cryptography;
 /// iterations of SHA-512, on a thread pool thread, behind an <c>await</c> that never yielded.
 /// </para>
 /// <para>
-/// Each thread that seals or opens keeps one <see cref="AesGcm"/> of its own for the cipher's lifetime instead of
-/// building and disposing one per call; an instance never leaves the thread that made it. Disposing the cipher
-/// disposes every one of them, which wipes their copies of the key. A thread that ends leaves its instance with the
-/// cipher until then: the cipher holds one instance for every thread that ever called it.
+/// A few <see cref="AesGcm"/> instances are kept idle and lent to whichever thread seals or opens, one call at a
+/// time, instead of one being built and disposed per call or one being kept per thread. One per thread held an
+/// instance, with its native key handle, for every thread that had ever called the cipher: a thousand short-lived
+/// threads left a thousand instances behind until the cipher was disposed. At most <see cref="IdleLimit"/> wait
+/// idle; an instance that comes back to a full pool is disposed. Disposing the cipher disposes the idle instances and
+/// wipes the derived key, and an instance lent out at that moment is disposed when its call returns it.
 /// </para>
 /// </remarks>
 public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
@@ -42,9 +44,10 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
     private const int TagLength = 16;
     private const int HeaderLength = TagOffset + TagLength;
     private const int StackLimit = 256;
+    private const int IdleLimit = 16;
 
     private readonly byte[] _key;
-    private readonly ThreadLocal<AesGcm> _instances;
+    private readonly AesGcm?[] _idle = new AesGcm?[IdleLimit];
     private int _isDisposed;
 
     /// <summary>Derives the key this cipher keeps for its lifetime.</summary>
@@ -53,11 +56,13 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
     /// at construction with the setting named, not on its first use with a <see cref="CryptographicException"/>
     /// that reads as tampering.
     /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="options"/> is null.</exception>
     /// <exception cref="ArgumentException">A setting is missing or out of range; the message names it.</exception>
     public SymmetricCipher(IOptions<CipherOptions> options)
     {
-        var settings = options.Value;
+        ArgumentNullException.ThrowIfNull(options);
 
+        var settings = options.Value;
         var failures = CipherRules.Failures(settings, section: null);
         if (failures.Count > 0)
             throw new ArgumentException(string.Join(' ', failures), nameof(options));
@@ -68,21 +73,22 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
             settings.Iterations,
             HashName(settings.HashMethod),
             settings.DesiredKeyLength);
-
-        _instances = new ThreadLocal<AesGcm>(() => new AesGcm(_key, TagLength), trackAllValues: true);
     }
 
-    /// <summary>Disposes the <see cref="AesGcm"/> instance of every thread that used this cipher.</summary>
-    /// <remarks>A call after this one throws <see cref="ObjectDisposedException"/>.</remarks>
+    /// <summary>Disposes the idle <see cref="AesGcm"/> instances and wipes the derived key.</summary>
+    /// <remarks>
+    /// A call after this one throws <see cref="ObjectDisposedException"/>. An instance lent out at this moment
+    /// finishes its call and is disposed when it comes back.
+    /// </remarks>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _isDisposed, 1) == 1)
             return;
 
-        foreach (var aes in _instances.Values)
-            aes.Dispose();
+        for (int slot = 0; slot < _idle.Length; slot++)
+            Interlocked.Exchange(ref _idle[slot], null)?.Dispose();
 
-        _instances.Dispose();
+        CryptographicOperations.ZeroMemory(_key);
     }
 
     /// <inheritdoc />
@@ -170,22 +176,85 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
         envelope[0] = Version;
         RandomNumberGenerator.Fill(envelope.Slice(NonceOffset, NonceLength));
 
-        var aes = _instances.Value!;
-        aes.Encrypt(
-            envelope.Slice(NonceOffset, NonceLength),
-            plainText,
-            envelope[HeaderLength..],
-            envelope.Slice(TagOffset, TagLength));
+        var aes = Rent();
+        try
+        {
+            aes.Encrypt(
+                envelope.Slice(NonceOffset, NonceLength),
+                plainText,
+                envelope[HeaderLength..],
+                envelope.Slice(TagOffset, TagLength));
+        }
+        finally
+        {
+            Return(aes);
+        }
     }
 
     private void Open(ReadOnlySpan<byte> envelope, Span<byte> plainText)
     {
-        var aes = _instances.Value!;
-        aes.Decrypt(
-            envelope.Slice(NonceOffset, NonceLength),
-            envelope[HeaderLength..],
-            envelope.Slice(TagOffset, TagLength),
-            plainText);
+        var aes = Rent();
+        try
+        {
+            aes.Decrypt(
+                envelope.Slice(NonceOffset, NonceLength),
+                envelope[HeaderLength..],
+                envelope.Slice(TagOffset, TagLength),
+                plainText);
+        }
+        finally
+        {
+            Return(aes);
+        }
+    }
+
+    /// <summary>An idle instance, or a new one under the key.</summary>
+    /// <remarks>
+    /// A new instance is checked against disposal once more after it is built, with a full fence: a thread that
+    /// passed the first check while another thread disposed the cipher would otherwise copy a key being wiped and
+    /// seal an envelope nobody can open, without an error. The second check sees the disposal whenever the key
+    /// reads could have overlapped the wipe.
+    /// </remarks>
+    private AesGcm Rent()
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _isDisposed) == 1, this);
+
+        for (int slot = 0; slot < _idle.Length; slot++)
+        {
+            var idle = Interlocked.Exchange(ref _idle[slot], null);
+            if (idle is not null)
+                return idle;
+        }
+
+        var made = new AesGcm(_key, TagLength);
+        if (Interlocked.CompareExchange(ref _isDisposed, 0, 0) == 1)
+        {
+            made.Dispose();
+            throw new ObjectDisposedException(GetType().FullName);
+        }
+
+        return made;
+    }
+
+    /// <summary>Puts an instance back to wait idle, or disposes it when the pool is full or the cipher is gone.</summary>
+    /// <remarks>
+    /// The disposal flag is read again after the instance is stored: a disposal that ran between the two reads
+    /// has already emptied the slots, so the instance is taken out and disposed here instead of waiting forever.
+    /// </remarks>
+    private void Return(AesGcm aes)
+    {
+        for (int slot = 0; slot < _idle.Length; slot++)
+        {
+            if (Interlocked.CompareExchange(ref _idle[slot], aes, null) is not null)
+                continue;
+
+            if (Volatile.Read(ref _isDisposed) == 1)
+                Interlocked.Exchange(ref _idle[slot], null)?.Dispose();
+
+            return;
+        }
+
+        aes.Dispose();
     }
 
     private static HashAlgorithmName HashName(HashAlgo method) => method switch
