@@ -1,6 +1,6 @@
 # Snail.Toolkit.Cryptography
 
-Symmetric AES encryption with PBKDF2 key derivation for .NET — an `ISymmetricCipher` over byte arrays and Base64 strings, configured through `IOptions` and registered with a single `AddSymmetricCipher` call.
+Authenticated symmetric encryption (AES-GCM) with PBKDF2 key derivation for .NET — an `ISymmetricCipher` over byte arrays, Base64 strings and the caller's own buffers, configured through `IOptions` and registered with a single `AddSymmetricCipher` call.
 
 ## Features
 
@@ -8,7 +8,8 @@ Symmetric AES encryption with PBKDF2 key derivation for .NET — an `ISymmetricC
 - **A fresh nonce per message**: the same text never encrypts to the same bytes twice
 - **Self-describing ciphertext**: a versioned envelope carrying its own nonce and tag
 - **Key derived once**: PBKDF2 runs when the cipher is built, not on every call
-- **Settings checked at startup**: a bad key length or a missing passphrase stops the host, not the first request
+- **Settings checked at startup**: a bad key length or a missing passphrase stops the host, not the first request; a cipher built by hand is judged by the same rules in its constructor
+- **Nothing allocated when you bring the buffer**: `TryEncrypt` and `TryDecrypt` seal and open in memory you own
 
 ## Installation
 
@@ -55,7 +56,7 @@ builder.Services.AddSymmetricCipher(options =>
 });
 ```
 
-`Passphrase` and `Salt` are required. `DesiredKeyLength` must be 16, 24 or 32, `Iterations` at least 100 000. Anything else fails validation when the host starts.
+`Passphrase` and `Salt` are required. `DesiredKeyLength` must be 16, 24 or 32, `Iterations` at least 100 000. Anything else fails validation when the host starts, with the setting named under the section it was read from.
 
 ## Usage
 
@@ -78,7 +79,19 @@ var raw = cipher.Decrypt(bytes);
 
 The operations are synchronous: they are CPU work over memory, and the one cost that genuinely blocked a thread — key derivation — is now paid once, when the cipher is constructed.
 
-Each thread keeps one AES-GCM instance of its own for as long as the cipher lives. `SymmetricCipher` is disposable: the container disposes the one it registered, and that wipes every instance's copy of the key. A cipher built by hand is disposed by whoever built it.
+A few AES-GCM instances wait idle and are lent to whichever thread seals or opens, one call at a time. `SymmetricCipher` is disposable: the container disposes the one it registered, which disposes the idle instances and wipes the derived key. A cipher built by hand is disposed by whoever built it, and is judged by the same rules as a registered one: a bad setting fails its constructor, naming the setting.
+
+When the envelope should land in memory you already own, `SymmetricCipher` seals and opens without allocating:
+
+```csharp
+var envelope = new byte[SymmetricCipher.EnvelopeLength(plainText.Length)];
+cipher.TryEncrypt(plainText, envelope, out _);
+
+var opened = new byte[envelope.Length - 29];
+cipher.TryDecrypt(envelope, opened, out int written);
+```
+
+Both answer `false`, with the length needed in `written`, when the buffer is too short. A bad envelope throws, as `Decrypt` does: a forgery is never reported as a sizing mistake.
 
 ## Ciphertext format
 
@@ -97,6 +110,7 @@ version(1) | nonce(12) | tag(16) | ciphertext(n)
 - `Iterations` defaults to 600 000, the OWASP figure for PBKDF2-HMAC-SHA512. Lowering it below 100 000 is refused.
 - Passphrase and salt are read as UTF-8, so any alphabet survives them.
 - There is no default passphrase and no parameterless registration. Encryption that silently works without configuration is worse than encryption that refuses to start.
+- **One key, for the life of the configuration.** There is no key rotation yet: every value is sealed under the key derived from the configured passphrase and salt, and changing either orphans everything sealed before. With a random 96-bit nonce per message, NIST SP 800-38D bounds one key to 2^32 messages before the chance of a repeated nonce stops being negligible; a deployment that seals billions of values needs a key per period, which is the next envelope version's job.
 
 ## Supported hash algorithms
 
@@ -104,11 +118,11 @@ version(1) | nonce(12) | tag(16) | ciphertext(n)
 
 SHA-1 was removed: it was the only choice here that weakened the derived key, and leaving it selectable meant a configuration file could quietly pick it.
 
-## Upgrading from 1.x
+## Upgrading from 1.0.x
 
-Version 2 changes both the ciphertext format and the API. **Data encrypted by 1.x cannot be read by 2.x** and has to be re-encrypted.
+Version 1.1.0 changed both the ciphertext format and the API; it should have been a major version, and this table is the apology. **Data encrypted by 1.0.x cannot be read by 1.1.0 or later** and has to be re-encrypted.
 
-| 1.x | 2.x |
+| 1.0.x | 1.1.0 and later |
 | --- | --- |
 | `EncryptAsync` / `DecryptAsync` | `Encrypt` / `Decrypt` |
 | `EncryptToBase64Async` / `DecryptFromBase64Async` | `EncryptToBase64` / `DecryptFromBase64` |

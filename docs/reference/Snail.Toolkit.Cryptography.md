@@ -11,11 +11,14 @@ AES-GCM encryption under a key derived once from the configured passphrase.
 | Member | Summary |
 | --- | --- |
 | `SymmetricCipher(IOptions<CipherOptions> options)` | Derives the key this cipher keeps for its lifetime. |
+| `bool TryDecrypt(ReadOnlySpan<byte> envelope, Span<byte> plainText, out int written)` | Opens an envelope into a buffer the caller provides, with nothing allocated. |
+| `bool TryEncrypt(ReadOnlySpan<byte> plainText, Span<byte> envelope, out int written)` | Seals bytes into an envelope the caller provides, with nothing allocated. |
 | `byte[] Decrypt(byte[] cipherText)` | Decrypts an envelope produced by `Encrypt`. |
 | `byte[] Encrypt(byte[] plainText)` | Encrypts bytes into a self-describing envelope. |
+| `int EnvelopeLength(int plainTextLength)` | The length of the envelope that seals a plaintext of the given length. |
 | `string DecryptFromBase64(string cipherText)` | Decrypts Base64 produced by `EncryptToBase64`. |
 | `string EncryptToBase64(string clearText)` | Encrypts text and returns the envelope as Base64. |
-| `void Dispose()` | Disposes the `AesGcm` instance of every thread that used this cipher. |
+| `void Dispose()` | Disposes the idle `AesGcm` instances and wipes the derived key. |
 
 ## Snail.Toolkit.Cryptography.Entities
 

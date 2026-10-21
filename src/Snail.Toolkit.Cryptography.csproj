@@ -5,9 +5,9 @@
         <PackageId>Snail.Toolkit.Cryptography</PackageId>
         <PackageTags>System.Security.Cryptography</PackageTags>
         <Title>Snail.Toolkit.Cryptography</Title>
-        <Authors>Toolkit</Authors>
-        <Description>Symmetric AES encryption with PBKDF2 key derivation for .NET. Exposes an async ISymmetricCipher over byte arrays and Base64 strings, configured through IOptions and registered with a single AddSymmetricCipher call.</Description>
-        <Copyright>Toolkit, 2023</Copyright>
+        <Authors>orldev</Authors>
+        <Description>Authenticated symmetric encryption (AES-GCM) with PBKDF2 key derivation for .NET. Exposes ISymmetricCipher over byte arrays, Base64 strings and the caller's own buffers, configured through IOptions and registered with a single AddSymmetricCipher call.</Description>
+        <Copyright>orldev, 2023–2026</Copyright>
         <RepositoryUrl>https://github.com/orldev/Snail.Toolkit.Cryptography</RepositoryUrl>
         <PackageProjectUrl>https://github.com/orldev/Snail.Toolkit.Cryptography</PackageProjectUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
