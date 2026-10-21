@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Snail.Toolkit.Cryptography.csproj" />
+  <Project Path="tests/Snail.Toolkit.Cryptography.Tests.csproj" />
+</Solution>
