@@ -1,5 +1,1 @@
 #nullable enable
-Snail.Toolkit.Cryptography.SymmetricCipher.Dispose() -> void
-Snail.Toolkit.Cryptography.SymmetricCipher.TryDecrypt(System.ReadOnlySpan<byte> envelope, System.Span<byte> plainText, out int written) -> bool
-Snail.Toolkit.Cryptography.SymmetricCipher.TryEncrypt(System.ReadOnlySpan<byte> plainText, System.Span<byte> envelope, out int written) -> bool
-static Snail.Toolkit.Cryptography.SymmetricCipher.EnvelopeLength(int plainTextLength) -> int

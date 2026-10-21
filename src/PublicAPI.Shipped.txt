@@ -27,9 +27,13 @@ Snail.Toolkit.Cryptography.Interfaces.ISymmetricCipher.EncryptToBase64(string! c
 Snail.Toolkit.Cryptography.SymmetricCipher
 Snail.Toolkit.Cryptography.SymmetricCipher.Decrypt(byte[]! cipherText) -> byte[]!
 Snail.Toolkit.Cryptography.SymmetricCipher.DecryptFromBase64(string! cipherText) -> string!
+Snail.Toolkit.Cryptography.SymmetricCipher.Dispose() -> void
 Snail.Toolkit.Cryptography.SymmetricCipher.Encrypt(byte[]! plainText) -> byte[]!
 Snail.Toolkit.Cryptography.SymmetricCipher.EncryptToBase64(string! clearText) -> string!
 Snail.Toolkit.Cryptography.SymmetricCipher.SymmetricCipher(Microsoft.Extensions.Options.IOptions<Snail.Toolkit.Cryptography.Entities.CipherOptions!>! options) -> void
+Snail.Toolkit.Cryptography.SymmetricCipher.TryDecrypt(System.ReadOnlySpan<byte> envelope, System.Span<byte> plainText, out int written) -> bool
+Snail.Toolkit.Cryptography.SymmetricCipher.TryEncrypt(System.ReadOnlySpan<byte> plainText, System.Span<byte> envelope, out int written) -> bool
 const Snail.Toolkit.Cryptography.Entities.CipherOptions.SectionName = "Cryptography" -> string!
 static Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.AddSymmetricCipher(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! sectionName = "Cryptography") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Snail.Toolkit.Cryptography.Extensions.ServiceCollectionExtensions.AddSymmetricCipher(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Snail.Toolkit.Cryptography.Entities.CipherOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Snail.Toolkit.Cryptography.SymmetricCipher.EnvelopeLength(int plainTextLength) -> int
