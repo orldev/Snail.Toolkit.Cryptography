@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Snail.Toolkit.Cryptography.Entities;
 using Snail.Toolkit.Cryptography.Interfaces;
 
@@ -12,8 +11,6 @@ namespace Snail.Toolkit.Cryptography.Extensions;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
-    private const int MinimumIterations = 100_000;
-
     extension(IServiceCollection services)
     {
         /// <summary>Registers the cipher, binding its settings from a configuration section.</summary>
@@ -33,7 +30,7 @@ public static class ServiceCollectionExtensions
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
 
-            Validated(services.AddOptions<CipherOptions>().Bind(configuration.GetSection(sectionName)));
+            CipherRules.Apply(services.AddOptions<CipherOptions>().Bind(configuration.GetSection(sectionName)), sectionName);
             services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
 
             return services;
@@ -51,39 +48,10 @@ public static class ServiceCollectionExtensions
             ArgumentNullException.ThrowIfNull(services);
             ArgumentNullException.ThrowIfNull(configure);
 
-            Validated(services.AddOptions<CipherOptions>().Configure(configure));
+            CipherRules.Apply(services.AddOptions<CipherOptions>().Configure(configure), section: null);
             services.TryAddSingleton<ISymmetricCipher, SymmetricCipher>();
 
             return services;
         }
     }
-
-    /// <summary>The one place the settings are judged, whichever overload supplied them.</summary>
-    /// <remarks>
-    /// Validation runs at start so that a key length AES cannot take, an undefined hash or a missing
-    /// passphrase stops the host. Each of those used to surface as a <c>CryptographicException</c> on the
-    /// first encryption a real request asked for, long after the process reported itself healthy.
-    /// </remarks>
-    private static void Validated(OptionsBuilder<CipherOptions> builder) =>
-        builder
-            .Validate(
-                settings => !string.IsNullOrWhiteSpace(settings.Passphrase),
-                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Passphrase)}' has to be set.")
-            .Validate(
-                settings => !string.IsNullOrWhiteSpace(settings.Salt),
-                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Salt)}' has to be set, or the derived "
-                + "key is a pure function of the passphrase and precomputable.")
-            .Validate(
-                settings => settings.Iterations >= MinimumIterations,
-                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.Iterations)}' has to be at least "
-                + $"{MinimumIterations}.")
-            .Validate(
-                settings => settings.DesiredKeyLength is 16 or 24 or 32,
-                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.DesiredKeyLength)}' has to be 16, 24 or 32, "
-                + "the key sizes AES accepts.")
-            .Validate(
-                settings => Enum.IsDefined(settings.HashMethod),
-                $"'{CipherOptions.SectionName}:{nameof(CipherOptions.HashMethod)}' has to be a defined "
-                + $"{nameof(HashAlgo)} value.")
-            .ValidateOnStart();
 }

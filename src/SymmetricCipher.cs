@@ -49,17 +49,23 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
     private int _isDisposed;
 
     /// <summary>Derives the key this cipher keeps for its lifetime.</summary>
-    /// <exception cref="ArgumentException">The passphrase or the salt is missing.</exception>
+    /// <remarks>
+    /// The settings are judged here by the rules the registration applies at start, so a cipher built by hand fails
+    /// at construction with the setting named, not on its first use with a <see cref="CryptographicException"/>
+    /// that reads as tampering.
+    /// </remarks>
+    /// <exception cref="ArgumentException">A setting is missing or out of range; the message names it.</exception>
     public SymmetricCipher(IOptions<CipherOptions> options)
     {
         var settings = options.Value;
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(settings.Passphrase, nameof(CipherOptions.Passphrase));
-        ArgumentException.ThrowIfNullOrWhiteSpace(settings.Salt, nameof(CipherOptions.Salt));
+        var failures = CipherRules.Failures(settings, section: null);
+        if (failures.Count > 0)
+            throw new ArgumentException(string.Join(' ', failures), nameof(options));
 
         _key = Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(settings.Passphrase),
-            Encoding.UTF8.GetBytes(settings.Salt),
+            Encoding.UTF8.GetBytes(settings.Passphrase!),
+            Encoding.UTF8.GetBytes(settings.Salt!),
             settings.Iterations,
             HashName(settings.HashMethod),
             settings.DesiredKeyLength);
