@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -112,59 +111,39 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
 
     /// <inheritdoc />
     /// <remarks>
-    /// The UTF-8 bytes and the envelope live in scratch memory — the stack up to 256 bytes, the shared pool
-    /// beyond — rather than in two arrays per call, and the plaintext is wiped before the scratch is given back.
+    /// The UTF-8 bytes and the envelope live in <see cref="Scratch"/> memory, the stack up to 256 bytes and the
+    /// shared pool beyond, rather than in two arrays per call; the plaintext is wiped before the scratch is given back.
     /// </remarks>
     public string EncryptToBase64(string clearText)
     {
         ArgumentNullException.ThrowIfNull(clearText);
 
         int length = Encoding.UTF8.GetByteCount(clearText);
-        byte[]? pooledText = length > StackLimit ? ArrayPool<byte>.Shared.Rent(length) : null;
-        byte[]? pooledEnvelope = HeaderLength + length > StackLimit ? ArrayPool<byte>.Shared.Rent(HeaderLength + length) : null;
-        Span<byte> plainText = (pooledText ?? stackalloc byte[StackLimit])[..length];
-        Span<byte> envelope = (pooledEnvelope ?? stackalloc byte[StackLimit])[..(HeaderLength + length)];
+        using var plainText = Scratch.Secret(length, stackalloc byte[StackLimit]);
+        using var envelope = Scratch.Public(HeaderLength + length, stackalloc byte[StackLimit]);
 
-        try
-        {
-            Encoding.UTF8.GetBytes(clearText, plainText);
-            Seal(plainText, envelope);
+        Encoding.UTF8.GetBytes(clearText, plainText.Bytes);
+        Seal(plainText.Bytes, envelope.Bytes);
 
-            return Convert.ToBase64String(envelope);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(plainText);
-            Return(pooledText);
-            Return(pooledEnvelope);
-        }
+        return Convert.ToBase64String(envelope.Bytes);
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// The decoded envelope and the plaintext live in scratch memory, as in <see cref="EncryptToBase64"/>. Text
-    /// that does not decode is handed to <see cref="Convert.FromBase64String"/>, so it is refused with the very
-    /// exception it always was.
+    /// The decoded envelope and the plaintext live in <see cref="Scratch"/> memory, as in
+    /// <see cref="EncryptToBase64"/>. Text that is not Base64 is refused at once: it used to be decoded a second
+    /// time by <see cref="Convert.FromBase64String"/> for the sake of its exception, which allocated the whole
+    /// decoded length, 7.3 MB for ten megabytes of text, only to throw.
     /// </remarks>
     public string DecryptFromBase64(string cipherText)
     {
         ArgumentNullException.ThrowIfNull(cipherText);
 
-        int capacity = cipherText.Length / 4 * 3;
-        byte[]? pooledEnvelope = capacity > StackLimit ? ArrayPool<byte>.Shared.Rent(capacity) : null;
-        Span<byte> decoded = (pooledEnvelope ?? stackalloc byte[StackLimit])[..capacity];
+        using var decoded = Scratch.Public(cipherText.Length / 4 * 3, stackalloc byte[StackLimit]);
+        if (!Convert.TryFromBase64String(cipherText, decoded.Bytes, out int written))
+            throw new FormatException("The text is not valid Base64.");
 
-        try
-        {
-            if (!Convert.TryFromBase64String(cipherText, decoded, out int written))
-                return Encoding.UTF8.GetString(Decrypt(Convert.FromBase64String(cipherText)));
-
-            return Opened(decoded[..written]);
-        }
-        finally
-        {
-            Return(pooledEnvelope);
-        }
+        return Opened(decoded.Bytes[..written]);
     }
 
     private static void MustBeAnEnvelope(ReadOnlySpan<byte> cipherText)
@@ -176,31 +155,14 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
             throw new CryptographicException($"Ciphertext version {cipherText[0]} is not supported.");
     }
 
-    private static void Return(byte[]? pooled)
-    {
-        if (pooled is not null)
-            ArrayPool<byte>.Shared.Return(pooled);
-    }
-
     private string Opened(ReadOnlySpan<byte> envelope)
     {
         MustBeAnEnvelope(envelope);
 
-        int length = envelope.Length - HeaderLength;
-        byte[]? pooledText = length > StackLimit ? ArrayPool<byte>.Shared.Rent(length) : null;
-        Span<byte> plainText = (pooledText ?? stackalloc byte[StackLimit])[..length];
+        using var plainText = Scratch.Secret(envelope.Length - HeaderLength, stackalloc byte[StackLimit]);
+        Open(envelope, plainText.Bytes);
 
-        try
-        {
-            Open(envelope, plainText);
-
-            return Encoding.UTF8.GetString(plainText);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(plainText);
-            Return(pooledText);
-        }
+        return Encoding.UTF8.GetString(plainText.Bytes);
     }
 
     private void Seal(ReadOnlySpan<byte> plainText, Span<byte> envelope)
