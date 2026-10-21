@@ -34,6 +34,10 @@ namespace Snail.Toolkit.Cryptography;
 /// idle; an instance that comes back to a full pool is disposed. Disposing the cipher disposes the idle instances and
 /// wipes the derived key, and an instance lent out at that moment is disposed when its call returns it.
 /// </para>
+/// <para>
+/// Text goes through strict UTF-8 in both directions: a lone surrogate used to be sealed as U+FFFD without a word,
+/// so the text that came back was not the text that went in. An encryption is lossless or it refuses.
+/// </para>
 /// </remarks>
 public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
 {
@@ -45,6 +49,8 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
     private const int HeaderLength = TagOffset + TagLength;
     private const int StackLimit = 256;
     private const int IdleLimit = 16;
+
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     private readonly byte[] _key;
     private readonly AesGcm?[] _idle = new AesGcm?[IdleLimit];
@@ -68,8 +74,8 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
             throw new ArgumentException(string.Join(' ', failures), nameof(options));
 
         _key = Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(settings.Passphrase!),
-            Encoding.UTF8.GetBytes(settings.Salt!),
+            Utf8.GetBytes(settings.Passphrase!),
+            Utf8.GetBytes(settings.Salt!),
             settings.Iterations,
             HashName(settings.HashMethod),
             settings.DesiredKeyLength);
@@ -124,11 +130,11 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
     {
         ArgumentNullException.ThrowIfNull(clearText);
 
-        int length = Encoding.UTF8.GetByteCount(clearText);
+        int length = Utf8.GetByteCount(clearText);
         using var plainText = Scratch.Secret(length, stackalloc byte[StackLimit]);
         using var envelope = Scratch.Public(HeaderLength + length, stackalloc byte[StackLimit]);
 
-        Encoding.UTF8.GetBytes(clearText, plainText.Bytes);
+        Utf8.GetBytes(clearText, plainText.Bytes);
         Seal(plainText.Bytes, envelope.Bytes);
 
         return Convert.ToBase64String(envelope.Bytes);
@@ -168,7 +174,7 @@ public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
         using var plainText = Scratch.Secret(envelope.Length - HeaderLength, stackalloc byte[StackLimit]);
         Open(envelope, plainText.Bytes);
 
-        return Encoding.UTF8.GetString(plainText.Bytes);
+        return Utf8.GetString(plainText.Bytes);
     }
 
     private void Seal(ReadOnlySpan<byte> plainText, Span<byte> envelope)

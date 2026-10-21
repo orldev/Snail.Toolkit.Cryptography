@@ -88,7 +88,7 @@ version(1) | nonce(12) | tag(16) | ciphertext(n)
 
 29 bytes of overhead per value, independent of length. The version byte is what makes a future format distinguishable from this one.
 
-`Decrypt` throws `CryptographicException` when the envelope is truncated, carries an unknown version, was altered, or was produced under a different key.
+`Decrypt` throws `CryptographicException` when the envelope is truncated, carries an unknown version, was altered, or was produced under a different key. Text is UTF-8 in both directions and strictly so: a string that is not well-formed UTF-16 (a lone surrogate) is refused by `EncryptToBase64` rather than sealed as U+FFFD, and an envelope whose plaintext is not UTF-8 opens with `Decrypt`, not `DecryptFromBase64`.
 
 ## Security
 

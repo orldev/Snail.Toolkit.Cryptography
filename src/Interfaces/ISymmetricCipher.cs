@@ -29,12 +29,15 @@ public interface ISymmetricCipher
     byte[] Decrypt(byte[] cipherText);
 
     /// <summary>Encrypts text and returns the envelope as Base64.</summary>
+    /// <remarks>The text is sealed as UTF-8, strictly: what cannot be carried is refused, never replaced.</remarks>
     /// <exception cref="ArgumentNullException"><paramref name="clearText"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="clearText"/> is not well-formed UTF-16, such as a lone surrogate.</exception>
     string EncryptToBase64(string clearText);
 
     /// <summary>Decrypts Base64 produced by <see cref="EncryptToBase64"/>.</summary>
     /// <exception cref="ArgumentNullException"><paramref name="cipherText"/> is null.</exception>
     /// <exception cref="FormatException"><paramref name="cipherText"/> is not valid Base64.</exception>
     /// <exception cref="CryptographicException">The envelope is truncated, unknown or fails authentication.</exception>
+    /// <exception cref="ArgumentException">The plaintext is not UTF-8 text: the envelope was sealed from bytes and opens with <see cref="Decrypt"/>.</exception>
     string DecryptFromBase64(string cipherText);
 }
