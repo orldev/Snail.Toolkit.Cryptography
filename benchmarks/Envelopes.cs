@@ -10,7 +10,7 @@ namespace Snail.Toolkit.Cryptography.Benchmarks;
 /// </summary>
 /// <remarks>
 /// Key derivation is paid once, in <see cref="Setup"/>, as the cipher pays it once in its constructor; what is
-/// left is the AES-GCM instance per call and, on the Base64 paths, the intermediate arrays. Read the Allocated
+/// left is the AES-GCM work itself and, on the Base64 paths, the scratch and the result. Read the Allocated
 /// column: the time of a few microseconds moves with the machine, the bytes do not.
 /// </remarks>
 [MemoryDiagnoser]
@@ -49,6 +49,10 @@ public class Envelopes
         if (_cipher.DecryptFromBase64(_sealedText) != _plainText || _cipher.DecryptFromBase64(Convert.ToBase64String(_sealedBytes)) != _plainText)
             throw new InvalidOperationException("The Base64 text did not round-trip, or the two paths seal different envelopes.");
     }
+
+    /// <summary>Disposes the cipher and the AES-GCM instance it kept for each thread.</summary>
+    [GlobalCleanup]
+    public void Cleanup() => _cipher.Dispose();
 
     /// <summary>Seals bytes into an envelope.</summary>
     [Benchmark]

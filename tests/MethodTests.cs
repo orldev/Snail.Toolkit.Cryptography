@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Options;
+using Snail.Toolkit.Cryptography.Entities;
 using Snail.Toolkit.Cryptography.Interfaces;
 
 namespace Snail.Toolkit.Cryptography.Tests;
@@ -149,5 +151,54 @@ public class MethodTests
         });
 
         Assert.ThrowsAny<CryptographicException>(() => second.Decrypt(first.Encrypt([7])));
+    }
+
+    /// <summary>
+    /// Every thread seals and opens with an AES-GCM instance of its own; envelopes sealed on one thread have to
+    /// open on any other.
+    /// </summary>
+    [Fact]
+    public void Encrypt_FromManyThreadsAtOnce_EveryEnvelopeOpensOnAnotherThread()
+    {
+        var texts = Enumerable.Range(0, 64).Select(index => new string('x', index * 37)).ToArray();
+        var sealedTexts = new string[texts.Length];
+
+        Parallel.For(0, texts.Length, index => sealedTexts[index] = _cipher.EncryptToBase64(texts[index]));
+
+        var opened = new string[texts.Length];
+
+        Parallel.For(0, texts.Length, index => opened[index] = _cipher.DecryptFromBase64(sealedTexts[texts.Length - 1 - index]));
+
+        Assert.Equal(texts.Reverse(), opened);
+    }
+
+    [Fact]
+    public void Dispose_ThenEncrypt_ThrowsObjectDisposedException()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        cipher.Encrypt([1, 2, 3]);
+
+        cipher.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => cipher.Encrypt([1, 2, 3]));
+    }
+
+    [Fact]
+    public void Dispose_Twice_DoesNotThrow()
+    {
+        var cipher = new SymmetricCipher(Options.Create(Settings()));
+        cipher.Dispose();
+
+        var error = Record.Exception(cipher.Dispose);
+
+        Assert.Null(error);
+    }
+
+    private static CipherOptions Settings()
+    {
+        var settings = new CipherOptions();
+        Helper.Defaults(settings);
+
+        return settings;
     }
 }

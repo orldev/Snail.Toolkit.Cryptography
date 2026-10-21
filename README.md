@@ -78,6 +78,8 @@ var raw = cipher.Decrypt(bytes);
 
 The operations are synchronous: they are CPU work over memory, and the one cost that genuinely blocked a thread — key derivation — is now paid once, when the cipher is constructed.
 
+Each thread keeps one AES-GCM instance of its own for as long as the cipher lives. `SymmetricCipher` is disposable: the container disposes the one it registered, and that wipes every instance's copy of the key. A cipher built by hand is disposed by whoever built it.
+
 ## Ciphertext format
 
 ```

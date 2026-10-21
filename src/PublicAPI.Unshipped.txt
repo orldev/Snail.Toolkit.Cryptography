@@ -1,1 +1,2 @@
 #nullable enable
+Snail.Toolkit.Cryptography.SymmetricCipher.Dispose() -> void

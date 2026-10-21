@@ -15,6 +15,7 @@ AES-GCM encryption under a key derived once from the configured passphrase.
 | `byte[] Encrypt(byte[] plainText)` | Encrypts bytes into a self-describing envelope. |
 | `string DecryptFromBase64(string cipherText)` | Decrypts Base64 produced by `EncryptToBase64`. |
 | `string EncryptToBase64(string clearText)` | Encrypts text and returns the envelope as Base64. |
+| `void Dispose()` | Disposes the `AesGcm` instance of every thread that used this cipher. |
 
 ## Snail.Toolkit.Cryptography.Entities
 

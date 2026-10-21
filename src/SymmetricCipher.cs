@@ -27,8 +27,14 @@ namespace Snail.Toolkit.Cryptography;
 /// constant key, yet it used to be recomputed on every call: 190 ms to encrypt three bytes at 600 000
 /// iterations of SHA-512, on a thread pool thread, behind an <c>await</c> that never yielded.
 /// </para>
+/// <para>
+/// Each thread that seals or opens keeps one <see cref="AesGcm"/> of its own for the cipher's lifetime instead of
+/// building and disposing one per call; an instance never leaves the thread that made it. Disposing the cipher
+/// disposes every one of them, which wipes their copies of the key. A thread that ends leaves its instance with the
+/// cipher until then: the cipher holds one instance for every thread that ever called it.
+/// </para>
 /// </remarks>
-public sealed class SymmetricCipher : ISymmetricCipher
+public sealed class SymmetricCipher : ISymmetricCipher, IDisposable
 {
     private const byte Version = 1;
     private const int NonceOffset = 1;
@@ -39,6 +45,8 @@ public sealed class SymmetricCipher : ISymmetricCipher
     private const int StackLimit = 256;
 
     private readonly byte[] _key;
+    private readonly ThreadLocal<AesGcm> _instances;
+    private int _isDisposed;
 
     /// <summary>Derives the key this cipher keeps for its lifetime.</summary>
     /// <exception cref="ArgumentException">The passphrase or the salt is missing.</exception>
@@ -55,6 +63,21 @@ public sealed class SymmetricCipher : ISymmetricCipher
             settings.Iterations,
             HashName(settings.HashMethod),
             settings.DesiredKeyLength);
+
+        _instances = new ThreadLocal<AesGcm>(() => new AesGcm(_key, TagLength), trackAllValues: true);
+    }
+
+    /// <summary>Disposes the <see cref="AesGcm"/> instance of every thread that used this cipher.</summary>
+    /// <remarks>A call after this one throws <see cref="ObjectDisposedException"/>.</remarks>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) == 1)
+            return;
+
+        foreach (var aes in _instances.Values)
+            aes.Dispose();
+
+        _instances.Dispose();
     }
 
     /// <inheritdoc />
@@ -179,7 +202,7 @@ public sealed class SymmetricCipher : ISymmetricCipher
         envelope[0] = Version;
         RandomNumberGenerator.Fill(envelope.Slice(NonceOffset, NonceLength));
 
-        using var aes = new AesGcm(_key, TagLength);
+        var aes = _instances.Value!;
         aes.Encrypt(
             envelope.Slice(NonceOffset, NonceLength),
             plainText,
@@ -189,7 +212,7 @@ public sealed class SymmetricCipher : ISymmetricCipher
 
     private void Open(ReadOnlySpan<byte> envelope, Span<byte> plainText)
     {
-        using var aes = new AesGcm(_key, TagLength);
+        var aes = _instances.Value!;
         aes.Decrypt(
             envelope.Slice(NonceOffset, NonceLength),
             envelope[HeaderLength..],
