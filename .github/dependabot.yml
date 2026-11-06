@@ -26,3 +26,8 @@ updates:
       packages:
         patterns: ['*']
         update-types: [minor, patch]
+    # BenchmarkDotNet brings Microsoft.Extensions.DependencyInjection 6.0.0 through Logging 6.0.0, and Dependabot pins
+    # it in the benchmarks with a VersionOverride, past the central versions. The tests' 10.0.x stays updated.
+    ignore:
+      - dependency-name: Microsoft.Extensions.DependencyInjection
+        versions: ['< 10.0.0']
